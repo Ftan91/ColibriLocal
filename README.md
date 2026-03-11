@@ -94,21 +94,16 @@ ColibriLocal/
 | `turbine_id`          | Turbine identifier                                  |
 | `window_type`         | Aggregation granularity (e.g. `day`, `week`)        |
 | `period`              | Truncated timestamp for the aggregation bucket      |
-| `min_power`           | Minimum power output in period                      |
-| `max_power`           | Maximum power output in period                      |
-| `avg_power`           | Average power output in period                      |
-| `fleet_avg_min_power` | Fleet average of per-turbine min power              |
-| `fleet_avg_max_power` | Fleet average of per-turbine max power              |
-| `fleet_avg_power`     | Fleet average of per-turbine avg power              |
-| `fleet_stddev`        | Standard deviation of avg_power across all turbines in the period |
-| `fleet_deviation`     | `avg_power - fleet_avg_power` (signed)                            |
-| `fleet_sigmas`        | `fleet_deviation / fleet_stddev` (z-score vs fleet)               |
-| `is_fleet_anomaly`    | `true` if turbine deviates > 2σ from the fleet mean               |
-| `turbine_avg_power`   | Turbine's own historical mean avg_power across all periods         |
-| `turbine_stddev`      | Turbine's own historical standard deviation of avg_power           |
-| `turbine_deviation`   | `avg_power - turbine_avg_power` (signed)                          |
-| `turbine_sigmas`      | `turbine_deviation / turbine_stddev` (z-score vs self)            |
-| `is_self_anomaly`     | `true` if turbine deviates > 2σ from its own historical mean      |
+| `period_min_power`    | Minimum power output in the period                              |
+| `period_max_power`    | Maximum power output in the period                              |
+| `period_avg_power`    | Average power output in the period                              |
+| `fleet_avg_min_power` | Fleet average of per-turbine period min power                   |
+| `fleet_avg_max_power` | Fleet average of per-turbine period max power                   |
+| `fleet_avg_power`     | Fleet average of per-turbine period avg power                   |
+| `fleet_stddev`        | Standard deviation of `period_avg_power` across all turbines in the period |
+| `fleet_deviation`     | `period_avg_power - fleet_avg_power` (signed)                              |
+| `fleet_sigmas`        | `fleet_deviation / fleet_stddev` (z-score vs fleet)                        |
+| `is_fleet_anomaly`    | `true` if turbine deviates > 2σ from the fleet mean                        |
 
 ---
 
