@@ -122,6 +122,14 @@ Applied in Silver. Rows failing any rule are routed to the quarantine table with
 
 Null imputation (forward + backward fill per turbine, ordered by timestamp) is applied **before** DQ evaluation so that recoverable rows are not unnecessarily quarantined.
 
+### Synthetic test data — `data_group_4.csv`
+
+A synthetic dataset was added for turbine 16 covering a full 24-hour period (`2022-03-01 00:00–23:00`). It deliberately introduces all DQ failure scenarios alongside clean rows, duplicate timestamps, and null measurements to validate the full Silver processing chain end-to-end:
+
+The resulting quarantine output:
+
+![Quarantine output](docs/images/quarantine.png)
+
 ---
 
 ## Setup
@@ -249,6 +257,9 @@ pytest tests/test_common.py
 ```
 
 Tests use a session-scoped `SparkSession` shared across all test classes to avoid repeated JVM startup overhead.
+
+All 24 unit tests passing across deduplication, null imputation, data quality rules, and clean/quarantine routing.
+![PyTests](docs/images/pytests.png)
 
 ---
 

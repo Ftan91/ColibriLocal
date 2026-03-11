@@ -127,32 +127,32 @@ def impute_nulls(
     df: DataFrame,
     partition_columns: list[str],
     order_by_column: str,
-    measurement_columns: list[str],
-    strategy: str = "both",
+    column_strategies: dict[str, str],
 ) -> DataFrame:
     """Fill null measurement values per partition ordered by a given column.
 
-    Fill strategies:
+    Fill strategies per column:
         - "forward": inherit the last known non-null value before each null.
           Covers gaps in the middle and tail of a series.
         - "backward": inherit the next known non-null value after each null.
           Covers nulls at the start of a series with no prior value.
-        - "both" (default): forward fill first, then backward fill any remaining
-          nulls. A value stays null only if the entire partition is null.
+        - "both": forward fill first, then backward fill any remaining nulls.
+          A value stays null only if the entire partition is null.
 
     Args:
         df: Input DataFrame.
-        partition_column: Column to partition by (e.g. "turbine_id").
+        partition_columns: Columns to partition by (e.g. ["turbine_id"]).
         order_by_column: Column to order within each partition (e.g. "timestamp").
-        measurement_columns: Columns to impute.
-        strategy: One of "forward", "backward", or "both". Defaults to "both".
+        column_strategies: Mapping of column name to fill strategy, e.g.
+            {"wind_speed": "both", "power_output": "forward"}.
 
     Returns:
-        DataFrame with nulls imputed in measurement columns.
+        DataFrame with nulls imputed per the specified strategies.
     """
     _VALID_IMPUTE_STRATEGIES = ["forward", "backward", "both"]
-    if strategy not in _VALID_IMPUTE_STRATEGIES:
-        raise ValueError(f"Invalid strategy '{strategy}'. Must be one of {_VALID_IMPUTE_STRATEGIES}.")
+    for column, strategy in column_strategies.items():
+        if strategy not in _VALID_IMPUTE_STRATEGIES:
+            raise ValueError(f"Invalid strategy '{strategy}' for column '{column}'. Must be one of {_VALID_IMPUTE_STRATEGIES}.")
 
     forward_window = (
         Window.partitionBy(partition_columns)
@@ -165,7 +165,7 @@ def impute_nulls(
         .rowsBetween(0, Window.unboundedFollowing)
     )
 
-    for column in measurement_columns:
+    for column, strategy in column_strategies.items():
         if strategy in ("forward", "both"):
             df = df.withColumn(column, last(col(column), ignorenulls=True).over(forward_window))
         if strategy in ("backward", "both"):

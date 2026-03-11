@@ -81,7 +81,7 @@ class TestImputeNulls:
             ("T1", datetime(2022, 3, 1, 2), None, None, None),
         ]
         df = spark.createDataFrame(rows, _SCHEMA)
-        result = impute_nulls(df, "turbine_id", "timestamp", ["wind_speed", "power_output"], strategy="forward")
+        result = impute_nulls(df, ["turbine_id"], "timestamp", {"wind_speed": "forward", "power_output": "forward"})
         rows_out = result.orderBy("timestamp").collect()
         assert rows_out[1]["wind_speed"] == 10.0
         assert rows_out[2]["power_output"] == 2.0
@@ -93,7 +93,7 @@ class TestImputeNulls:
             ("T1", datetime(2022, 3, 1, 2), 10.0, 180.0, 2.0),
         ]
         df = spark.createDataFrame(rows, _SCHEMA)
-        result = impute_nulls(df, "turbine_id", "timestamp", ["wind_speed", "power_output"], strategy="backward")
+        result = impute_nulls(df, ["turbine_id"], "timestamp", {"wind_speed": "backward", "power_output": "backward"})
         rows_out = result.orderBy("timestamp").collect()
         assert rows_out[0]["wind_speed"] == 10.0
         assert rows_out[1]["power_output"] == 2.0
@@ -105,7 +105,7 @@ class TestImputeNulls:
             ("T1", datetime(2022, 3, 1, 2), None, None, None),   # trailing null — forward fills
         ]
         df = spark.createDataFrame(rows, _SCHEMA)
-        result = impute_nulls(df, "turbine_id", "timestamp", ["wind_speed", "power_output"])
+        result = impute_nulls(df, ["turbine_id"], "timestamp", {"wind_speed": "both", "power_output": "both"})
         rows_out = result.orderBy("timestamp").collect()
         assert rows_out[0]["wind_speed"] == 10.0  # backward filled
         assert rows_out[2]["power_output"] == 2.0  # forward filled
@@ -116,7 +116,7 @@ class TestImputeNulls:
             ("T2", datetime(2022, 3, 1, 0), None, None, None),
         ]
         df = spark.createDataFrame(rows, _SCHEMA)
-        result = impute_nulls(df, "turbine_id", "timestamp", ["wind_speed", "power_output"])
+        result = impute_nulls(df, ["turbine_id"], "timestamp", {"wind_speed": "both", "power_output": "both"})
         t2 = result.filter("turbine_id = 'T2'").collect()[0]
         assert t2["wind_speed"] is None
         assert t2["power_output"] is None
@@ -127,7 +127,7 @@ class TestImputeNulls:
             ("T1", datetime(2022, 3, 1, 1), None, None, None),
         ]
         df = spark.createDataFrame(rows, _SCHEMA)
-        result = impute_nulls(df, "turbine_id", "timestamp", ["wind_speed", "power_output"])
+        result = impute_nulls(df, ["turbine_id"], "timestamp", {"wind_speed": "both", "power_output": "both"})
         for row in result.collect():
             assert row["wind_speed"] is None
             assert row["power_output"] is None
@@ -138,7 +138,7 @@ class TestImputeNulls:
             ("T1", datetime(2022, 3, 1, 1), 11.0, 185.0, 2.5),
         ]
         df = spark.createDataFrame(rows, _SCHEMA)
-        result = impute_nulls(df, "turbine_id", "timestamp", ["wind_speed", "power_output"])
+        result = impute_nulls(df, ["turbine_id"], "timestamp", {"wind_speed": "both", "power_output": "both"})
         rows_out = result.orderBy("timestamp").collect()
         assert rows_out[0]["wind_speed"] == 10.0
         assert rows_out[1]["wind_speed"] == 11.0
@@ -147,4 +147,4 @@ class TestImputeNulls:
         rows = [("T1", datetime(2022, 3, 1), 10.0, 180.0, 2.0)]
         df = spark.createDataFrame(rows, _SCHEMA)
         with pytest.raises(ValueError, match="Invalid strategy"):
-            impute_nulls(df, "turbine_id", "timestamp", ["wind_speed"], strategy="sideways")
+            impute_nulls(df, ["turbine_id"], "timestamp", {"wind_speed": "sideways"})

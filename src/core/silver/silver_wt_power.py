@@ -40,14 +40,11 @@ def _apply_dq(df: DataFrame) -> tuple[DataFrame, DataFrame]:
                        when(col("turbine_id").isNull(), lit("turbine_id is null"))
                        .when(col("timestamp").isNull(), lit("timestamp is null"))
                        .when(col("wind_speed") < 0, lit("wind_speed is negative"))
-                       .when(
-                           (col("wind_direction") < 0) | (col("wind_direction") > 359),
-                           lit("wind_direction out of range 0-359"),
-                           )
-                        .when(col("power_output") < 0, lit("power_output is negative"))
-                        .when((col("wind_speed") == 0) & (col("power_output") > 0), lit("power_output > 0 when wind_speed is 0"))
-                        .otherwise(None)
-                        )
+                       .when(~col("wind_direction").between(0, 359), lit("wind_direction out of range 0-359"))
+                       .when(col("power_output") < 0, lit("power_output is negative"))
+                       .when((col("wind_speed") == 0) & (col("power_output") > 0), lit("power_output > 0 when wind_speed is 0"))
+                       .otherwise(None)
+                       )
 
     clean_df = df.filter(col("dq_failure_reason").isNull()).drop("dq_failure_reason")
     quarantine_df = df.filter(col("dq_failure_reason").isNotNull())
@@ -79,9 +76,13 @@ def transform_wind_turbines(spark: SparkSession, output_path: str = DELTA_BASE) 
     df = deduplicate(df, ["turbine_id", "timestamp"], "ingested_at", ascending=False)
     logger.info("Deduplication complete")
 
-    # Forward fill nulls before DQ evaluation so that rows recoverable by
+    # Forward and backward fill nulls before DQ evaluation so that rows recoverable by
     # imputation are not unnecessarily quarantined
-    df = impute_nulls(df, "turbine_id", "timestamp", ["wind_speed", "wind_direction", "power_output"])
+    df = impute_nulls(df, ["turbine_id"], "timestamp", {
+        "wind_speed": "both",
+        "wind_direction": "both",
+        "power_output": "both",
+    })
     logger.info("Null imputation complete")
 
     # Split into clean and quarantine based on DQ rules
