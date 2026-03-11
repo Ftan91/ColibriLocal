@@ -19,10 +19,11 @@ _VALID_WINDOWS = ["hour", "day", "week", "month", "year"]
 
 
 def _build_summary(df: DataFrame, window: str = "day") -> DataFrame:
-    """Aggregate min, max, and avg power output per turbine over a configurable time window.
+    """Aggregate min, max, and avg power output per turbine and fleet over a configurable time window.
 
     The timestamp is truncated to the requested granularity so all readings
-    within the same bucket are grouped together.
+    within the same bucket are grouped together. Fleet benchmarks are computed
+    as the average of each per-turbine metric across all turbines in the same period.
 
     Args:
         df: Cleaned Silver DataFrame.
@@ -30,8 +31,8 @@ def _build_summary(df: DataFrame, window: str = "day") -> DataFrame:
             Defaults to "day".
 
     Returns:
-        DataFrame with columns: turbine_id, period, window_type, min_power, max_power, avg_power,
-        fleet_avg_min_power, fleet_avg_max_power, fleet_avg_power.
+        DataFrame with columns: turbine_id, period, min_power, max_power, avg_power,
+        fleet_avg_min_power, fleet_avg_max_power, fleet_avg_power, window_type.
     """
     if window not in _VALID_WINDOWS:
         raise ValueError(f"Invalid window '{window}'. Must be one of {_VALID_WINDOWS}.")
@@ -56,27 +57,40 @@ def _build_summary(df: DataFrame, window: str = "day") -> DataFrame:
 
 
 def _enrich_with_anomaly_flags(summary_df: DataFrame) -> DataFrame:
-    """Flag turbines whose avg_power deviates more than 2 std from the fleet mean for that period.
+    """Flag turbines deviating more than 2 standard deviations from the fleet or their own historical mean.
 
-    For each period, the fleet mean (fleet_avg_power) and fleet standard deviation are
-    computed across all turbines. A turbine is anomalous if its avg_power differs from
-    the fleet mean by more than 2 standard deviations — indicating it is significantly
-    under- or over-performing relative to its peers in the same time window.
+    Two independent anomaly signals are computed:
+        - Fleet anomaly: turbine's avg_power vs the fleet mean for that period.
+          Catches turbines that are significantly under- or over-performing
+          relative to their peers at the same point in time.
+        - Self anomaly: turbine's avg_power vs its own historical mean across all periods.
+          Catches turbines that are behaving differently from their own baseline,
+          even if the rest of the fleet is also affected.
 
     Args:
         summary_df: Output of _build_summary (includes fleet_avg_power column).
 
     Returns:
-        summary_df with added columns: fleet_stddev, fleet_deviation, fleet_sigmas, is_anomaly.
+        summary_df with added columns: fleet_stddev, fleet_deviation, fleet_sigmas,
+        is_fleet_anomaly, turbine_avg_power, turbine_stddev, turbine_deviation,
+        turbine_sigmas, is_self_anomaly.
     """
     fleet_window = Window.partitionBy("period")
+    turbine_window = Window.partitionBy("turbine_id")
 
     return (
         summary_df
+        # Fleet anomaly — compare against peers in the same period
         .withColumn("fleet_stddev", round(stddev("avg_power").over(fleet_window), 2))
         .withColumn("fleet_deviation", round(col("avg_power") - col("fleet_avg_power"), 2))
         .withColumn("fleet_sigmas", round(col("fleet_deviation") / col("fleet_stddev"), 2))
-        .withColumn("is_anomaly", abs(col("fleet_sigmas")) > 2)
+        .withColumn("is_fleet_anomaly", abs(col("fleet_sigmas")) > 2)
+        # Self anomaly — compare against the turbine's own historical mean across all periods
+        .withColumn("turbine_avg_power", round(mean("avg_power").over(turbine_window), 2))
+        .withColumn("turbine_stddev", round(stddev("avg_power").over(turbine_window), 2))
+        .withColumn("turbine_deviation", round(col("avg_power") - col("turbine_avg_power"), 2))
+        .withColumn("turbine_sigmas", round(col("turbine_deviation") / col("turbine_stddev"), 2))
+        .withColumn("is_self_anomaly", abs(col("turbine_sigmas")) > 2)
     )
 
 
@@ -85,13 +99,13 @@ def aggregate_wind_turbines(
     window: str = "day",
     output_path: str = DELTA_BASE,
 ) -> None:
-    """Read the Silver Delta table, produce summary stats and anomaly tables in Gold.
+    """Read the Silver clean table, aggregate per turbine per time window, and write to Gold.
 
     Writes to a single Delta fact table:
         - gold/fct_turbine_power_snapshot: min, max, avg power per turbine per period,
-          fleet benchmarks, anomaly flags, and window_type for granularity isolation.
+          fleet benchmarks, z-score anomaly flags, and window_type for granularity isolation.
           MERGEd on (turbine_id, period, window_type) so reruns are idempotent and
-          different granularities coexist without collision.
+          multiple granularities coexist without collision via partitioning on window_type.
 
     Args:
         spark: Active SparkSession to use for reading and writing.
@@ -112,8 +126,8 @@ def aggregate_wind_turbines(
     enriched_df = enriched_df.select("turbine_id", "window_type", "period",
                                      "min_power", "max_power", "avg_power",
                                      "fleet_avg_min_power", "fleet_avg_max_power", "fleet_avg_power",
-                                     "fleet_stddev", "fleet_deviation", "fleet_sigmas",
-                                     "is_anomaly")
+                                     "fleet_stddev", "fleet_deviation", "fleet_sigmas", "is_fleet_anomaly",
+                                     "turbine_avg_power", "turbine_stddev", "turbine_deviation", "turbine_sigmas", "is_self_anomaly")
 
     if not DeltaTable.isDeltaTable(spark, gold_table):
         logger.info("Gold table does not exist — performing initial write")
