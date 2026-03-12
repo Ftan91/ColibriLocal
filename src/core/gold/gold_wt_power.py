@@ -76,7 +76,7 @@ def _enrich_with_anomaly_flags(summary_df: DataFrame) -> DataFrame:
         .withColumn("fleet_stddev", round(stddev("period_avg_power").over(fleet_window), 2))
         .withColumn("fleet_deviation", round(col("period_avg_power") - col("fleet_avg_power"), 2))
         .withColumn("fleet_sigmas", round(col("fleet_deviation") / col("fleet_stddev"), 2))
-        .withColumn("is_fleet_anomaly", abs(col("fleet_sigmas")) > 2)
+        .withColumn("is_fleet_anomaly", abs(col("fleet_sigmas")) >= 2)
     )
 
 
@@ -113,7 +113,7 @@ def aggregate_wind_turbines(
                                      "period_min_power", "period_max_power", "period_avg_power",
                                      "fleet_avg_min_power", "fleet_avg_max_power", "fleet_avg_power",
                                      "fleet_stddev", "fleet_deviation", "fleet_sigmas", "is_fleet_anomaly")
-    enriched_df.show()
+
     if not DeltaTable.isDeltaTable(spark, gold_table):
         logger.info("Gold table does not exist — performing initial write")
         enriched_df.coalesce(1).write.format("delta").partitionBy("window_type").save(gold_table)

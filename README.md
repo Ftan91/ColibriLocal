@@ -103,8 +103,9 @@ ColibriLocal/
 | `fleet_stddev`        | Standard deviation of `period_avg_power` across all turbines in the period |
 | `fleet_deviation`     | `period_avg_power - fleet_avg_power` (signed)                              |
 | `fleet_sigmas`        | `fleet_deviation / fleet_stddev` (z-score vs fleet)                        |
-| `is_fleet_anomaly`    | `true` if turbine deviates > 2σ from the fleet mean                        |
+| `is_fleet_anomaly`    | `true` if turbine deviates >= 2σ from the fleet mean                        |
 
+![Summary stats](docs/images/summary_stats.png)
 ---
 
 ## Data Quality Rules
